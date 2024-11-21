@@ -1,75 +1,60 @@
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.5)
 project(pi_sonar)
 
-FIND_LIBRARY(pigpio REQUIRED)
+set(CMAKE_CXX_STANDARD 17) # use C++14
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
-  diagnostic_updater
-  roscpp
-  sensor_msgs
-)
+# Compiler flags for warnings
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-###################################
-## catkin specific configuration ##
-###################################
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(diagnostic_updater REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
-catkin_package(
-   CATKIN_DEPENDS diagnostic_updater roscpp sensor_msgs
-)
+# Locate pigpio library
+find_library(PIGPIO_LIBRARY pigpio PATHS /usr/local/lib)
+find_path(PIGPIO_INCLUDE_DIR pigpio.h PATHS /usr/local/include)
 
-###########
-## Build ##
-###########
+if (NOT PIGPIO_LIBRARY OR NOT PIGPIO_INCLUDE_DIR)
+  message(FATAL_ERROR "Could not find pigpio library or headers")
+endif()
 
-
-include_directories(
-  include
-  pigpio_INCLUDES
-  ${catkin_INCLUDE_DIRS}
-)
-
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES arm*)
-
+# Create the executable
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch*")
   add_executable(pi_sonar src/pi_sonar.cpp)
-  target_compile_options(pi_sonar PRIVATE -std=c++11)
-  target_link_libraries(pi_sonar ${catkin_LIBRARIES}
-                        ${roscpp_LIBRARIES} pigpiod_if2 pthread)
+  target_compile_options(pi_sonar PRIVATE -std=c++17)
+
+  # Link libraries
+  target_link_libraries(pi_sonar
+    pigpiod_if2
+    pthread
+  )
+
+  # Install the executable
+  install(TARGETS pi_sonar
+    DESTINATION lib/${PROJECT_NAME}
+  )
 endif()
 
-#############
-## Install ##
-#############
-
-if(${CMAKE_SYSTEM_PROCESSOR} MATCHES arm*)
-install(TARGETS pi_sonar
-    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-    PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE
-                GROUP_READ GROUP_EXECUTE
-                WORLD_READ WORLD_EXECUTE
-                SETUID SETGID
-)
-endif()
-
-## Mark other files for installation (e.g. launch and bag files, etc.)
-install(DIRECTORY launch/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+# Install launch files
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
 )
 
-#############
-## Testing ##
-#############
+# Link the ROS 2 libraries to the executable using ament_target_dependencies
+ament_target_dependencies(${PROJECT_NAME}
+  "rclcpp"
+  "sensor_msgs"
+  "diagnostic_updater"
+)
 
-## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_hercules_sonar_skirt.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
+# Install the executable
+install(TARGETS ${PROJECT_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
 
-## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
+# Package information
+ament_package()
